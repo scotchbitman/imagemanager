@@ -49,32 +49,52 @@
 		public function makeThumb($img){
 			$bkg = self::getBackground($img);
 			$thumb = $img->reduce($bkg);
+			$coord = $thumb->getPosition($bkg);
 
-			header('Content-Type: image/jpeg');
-
-			$imc = @imagecreatefromjpeg($img->getPath());
+			header('Content-Type: '.$img->getMime());
 			$imct  = imagecreatetruecolor($bkg->getWidth(),$bkg->getHeight());
+			
+			switch($img->getMime()){
+				case 'image/jpeg': 
+					self::createJPEG($img,$imct,$bkg,$thumb,$coord);
+					break;
+				case 'image/gif': self::createGIF(); break;
+				case 'image/png': self::createPNG(); break;
+			}
+			
+			imagedestroy($imct);
+		}
+		
+		/**
+		 *	Méthode de création d'image JPEG
+		 */
+		private function createJPEG($img,$imct,$bkg,$thumb,$coord){
+			$imc = imagecreatefromjpeg($img->getPath());
 			$back = imagecolorallocate($imct, 255, 255, 255);
 			imagefilledrectangle(
-				$imct, 
-				0, 0, 
+				$imct, 0, 0, 
 				$bkg->getWidth(), $bkg->getHeight(), 
 				$back
 			);
 			
-			$coord = $thumb->getPosition($bkg);
-			
 			imagecopyresampled(
-				$imct, $imc,
-				$coord['x'], $coord['y'],
-				0, 0,
+				$imct, $imc, $coord['x'], $coord['y'], 0, 0,
 				$thumb->getWidth(), $thumb->getHeight(),
 				$img->getWidth(), $img->getHeight()
 			);
 			
 			imagejpeg($imct);
-			imagedestroy($imct);
 		}
+		
+		/**
+		 *	Méthode de création d'image GIF
+		 */
+		private function createGIF(){}
+		
+		/**
+		 *	Méthode de création d'image PNG
+		 */
+		private function createPNG(){}
 	}
 	
 	/**
