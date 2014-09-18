@@ -44,7 +44,7 @@
 			$ratio = (!$this->config['ratio']) ? 
 			$img->getRatio() : $this->config['ratio'];
 			
-			if($this->config['landscapeThumb'] && 
+			if(!$this->config['landscapeThumb'] && 
 			$img->getOrientation() == 'portrait') $ratio = 1 / $ratio;
 			
 			$width = $this->config['maxWidth'];
