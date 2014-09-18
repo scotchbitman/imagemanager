@@ -1,189 +1,189 @@
 <?php
 	/**
-	 *	Classe permettant de gérer les images lors d'uploads.
-	 *	Gestion des thumbnails (miniatures)... etc.
+	 *	Classe ImageManager
 	 *
-	 *	@author Alexandre BLIEUX
+	 *	Cette classe s'appuie essentiellement sur les fonctions de traitement
+	 *	des images de la librairie GD fournie en standard avec PHP, en cas de
+	 *	dysfonctionnement il peut être intéressant de vérifier que cette
+	 *	librairie est bien active.
+	 *
+	 *	@see phpinfo()
+	 *	@param config : 
+	 *		(Array) Tableau de paramètres permettant de configurer l'instance
+	 *		de classe.
+	 *
+	 *	@Author Alexandre BLIEUX
+	 *	@version 0.1
 	 */
 	class ImageManager{
-		
-		protected $rsrc, $config = array(), $width, $height, $type, $mime;
-		protected $bkg, $img, $thumb;
-		/**
-		 *	CONSTRUCTEUR
-		 *
-		 *	@params
-		 *		$rsrc (Mixed): 
-		 *			Représente une image ou une collection d'images (Array)
-		 *
-		 *		$config (Array): 
-		 *			Tableau regroupant les paramètres personnalisables en
-		 *			fonction des besoins. Une configuration par défaut est
-		 *			en place et n'est modifiée qu'en fonction des nouveaux
-		 *			paramètres entrés.
-		 *
-		 *	@since version 0.1
-		 */
-		public function __construct($rsrc,$config = NULL){
-			// Valeurs par defaut
+
+		protected $config = array();
+
+		public function __construct($config = NULL){
 			$this->config = array(
-				'maxWidth' => 90,
+				'path' => 'thumbnails/',
 				'ratio' => NULL,
-				'path' => 'thumbnails/'
+				'maxWidth' => 90,
+				'landscapeThumb' => true
 			);
 			
-			// Ajout des valeur entrées en config;
 			if($config) $this->config = $config + $this->config;
-			$this->rsrc = $rsrc;
-			$img = getimagesize($rsrc);
-			list($this->width,$this->height,$this->type) = $img;
-			$this->mime = $img['mime'];
+		}
+
+		/**
+		 *	Permet de créer une image de fond vide afin d'y appliquer la
+		 *	miniature générée.
+		 *
+		 *	@param img : (Canvas)
+		 *		Objet de type Canvas
+		 *
+		 *	@return Object : (Image)
+		 */
+		private function getBackground($img){
+		
+			$ratio = (!$this->config['ratio']) ? 
+			$img->getRatio() : $this->config['ratio'];
 			
-			$this->img = new Canvas($this->width,$this->height);
+			if($this->config['landscapeThumb'] && 
+			$img->getOrientation() == 'portrait') $ratio = 1 / $ratio;
 			
-			if($this->config['ratio'] == NULL) 
-			$this->config['ratio'] = round($this->img->getRatio());
+			$width = $this->config['maxWidth'];
+			$height= $this->config['maxWidth'] / $ratio;
 			
-			$this->bkg = new Image(
-				$this->config['maxWidth'],
-				round($this->config['maxWidth'] / $this->config['ratio'])
-			);
+			return new Image($width,$height);
 		}
 		
 		/**
-		 *	@return (String) Retourne la dernière partie de l'URL
-		 *					 du fichier, c'est à dire son nom.
+		 *	Permet de générer une miniature.
+		 *
+		 *	Suivant le type d'image sur laquelle on travaille, des méthodes
+		 *	spécifiques seront appelées.
+		 *
+		 *	@param img : (Canvas)
+		 *		Objet de type Canvas.
 		 */
-		private function getNewNameOfUploadedFile(){
-			$parts = explode('/',$this->rsrc);
-			return $parts[count($parts) - 1];
-		}
-		
-		public function getWidth(){return $this->width;}
-		public function getHeight(){return $this->height;}
-		public function getType(){return $this->type;}
-		
-		/**
-		 *	Méthode permattant de redimentionner une image suivant un ratio
-		 *	(largeur ou hauteur maxi) et d'enregistrer la miniature générée.
-		 */
-		public function makeThumb(){
-			$maxWidth = $this->config['maxWidth'];
-			
-			if (($this->width < $maxWidth) && ($this->height < $maxWidth))
-			throw new ImageManagerErrorException(
-				'L\'image choisie est trop petite.'
-			);
-			
-			$this->thumb = $this->img->reduce($this->bkg);
-			$coord = $this->thumb->getPosition($this->bkg);
+		public function makeThumb($img){
+			$bkg = self::getBackground($img);
+			$thumb = $img->reduce($bkg);
+			$coord = $thumb->getPosition($bkg);
 			
 			$path = $this->config['path'];
-			
-			// DIR
 			if (!is_dir($path)) mkdir($path, 0777, true);
 
-			## Case JPEG
-			if($this->mime == "image/jpeg"){									
-				$new_pict = imagecreatefromjpeg($this->rsrc);
-				
-				$thumbnail = imagecreatetruecolor(
-					$this->bkg->getWidth(), 
-					$this->bkg->getHeight()
-				);
-				
-				$back = imagecolorallocate($thumbnail, 255, 255, 255);
-				
-				imagefilledrectangle(
-					$thumbnail, 
-					0, 0, 
-					$this->bkg->getWidth(), 
-					$this->bkg->getHeight(), 
-					$back
-				);
-				
-				imagecopyresampled(
-					$thumbnail, 
-					$new_pict, 
-					$coord['x'], 
-					$coord['y'], 
-					0, 0, 
-					$this->thumb->getWidth(), 
-					$this->thumb->getHeight(), 
-					$this->width, 
-					$this->height
-				);
-				// enregistrement thumbnail dans repertoire thumb
-				imagejpeg($thumbnail,$path.self::getNewNameOfUploadedFile());
-				imagedestroy($thumbnail);
-			}					
-			## Case GIF
-			if($this->mime == "image/gif"){	
-				$new_pict = imagecreatefromgif($this->rsrc);		
-				$thumbnail = imagecreatetruecolor(
-					$this->bkg->getWidth(), 
-					$this->bkg->getHeight()
-				);
-				# Si image GIF transparente
-				if (imagecolortransparent($new_pict) >= 0) {
-					$color = imagecolorallocate($thumbnail, 255, 255, 255);
-					imagefill($thumbnail, 0, 0, $color);
-					imagecolortransparent($thumbnail, $color);						
-				} # -- end
-				imagecopyresampled(
-					$thumbnail, 
-					$new_pict, 
-					$coord['x'], 
-					$coord['y'], 
-					0, 0, 
-					$this->thumb->getWidth(), 
-					$this->thumb->getHeight(), 
-					$this->width, 
-					$this->height
-				);
-				// enregistrement thumbnail dans repertoire thumb
-				imagegif($thumbnail,$path.self::getNewNameOfUploadedFile());
-				imagedestroy($thumbnail);
+			$imct  = imagecreatetruecolor($bkg->getWidth(),$bkg->getHeight());
+			
+			switch($img->getMime()){
+				case 'image/jpeg': 
+					self::createJPEG($img,$imct,$bkg,$thumb,$coord,$path);
+					break;
+				case 'image/gif': 
+					self::createGIF($img,$imct,$thumb,$coord,$path); 
+					break;
+				case 'image/png': 
+					self::createPNG($img,$imct,$thumb,$coord,$path);
+					break;
 			}
-			## Case PNG
-			if($this->mime == "image/png"){	
-				$new_pict = imagecreatefrompng($this->rsrc);
-					
-				$thumbnail = imagecreatetruecolor(
-					$this->bkg->getWidth(), 
-					$this->bkg->getHeight()
-				);	
-				# Gestion de la transparence
-				imagealphablending($thumbnail, false);
-				imagesavealpha($thumbnail, true);
-				
-				$trans_colour = imagecolorallocatealpha($thumbnail, 0, 0, 0, 127);
-    			imagefill($thumbnail, 0, 0, $trans_colour);
-					
-				# -- end				
-				imagecopyresampled(
-					$thumbnail, 
-					$new_pict, 
-					$coord['x'], 
-					$coord['y'], 
-					0, 0, 
-					$this->thumb->getWidth(), 
-					$this->thumb->getHeight(), 
-					$this->width, 
-					$this->height
-				);
-				// enregistrement thumbnail dans repertoire thumb
-				imagepng($thumbnail,$path.self::getNewNameOfUploadedFile());
-				imagedestroy($thumbnail);
+			
+			imagedestroy($imct);
+		}
+		
+		/**
+		 *	Méthode de création d'image JPEG
+		 *
+		 *	@params
+		 *		img : (Image) Objet image à manipuler.
+		 *		imct:(Resource) Renvoyée par la méthode imagecreatetruecolor()
+		 *		bkg : (Image) Objet image vide sur lequel on va appliquer la
+		 *			miniature.
+		 *		thumb:(Image) Objet image réduit.
+		 *		coord:(Array)
+		 *			x : abscisse du coin supérieur gauche de la miniature.
+		 *			y: ordonnée du coin supérieur gauche de la miniature.
+		 *		path:(String) Chemin de sauvegarde de la mininature.
+		 */
+		private static function createJPEG($img,$imct,$bkg,$thumb,$coord,$path){
+			$imc = imagecreatefromjpeg($img->getPath());
+			$back = imagecolorallocate($imct, 255, 255, 255);
+			imagefilledrectangle(
+				$imct, 0, 0, 
+				$bkg->getWidth(), $bkg->getHeight(), 
+				$back
+			);
+			
+			imagecopyresampled(
+				$imct, $imc, $coord['x'], $coord['y'], 0, 0,
+				$thumb->getWidth(), $thumb->getHeight(),
+				$img->getWidth(), $img->getHeight()
+			);
+			
+			imagejpeg($imct,$path.$img->getName());
+		}
+		
+		/**
+		 *	Méthode de création d'image GIF
+		 *
+		 *	@params
+		 *		img : (Image) Objet image à manipuler.
+		 *		imct:(Resource) Renvoyée par la méthode imagecreatetruecolor()
+		 *		thumb:(Image) Objet image réduit.
+		 *		coord:(Array)
+		 *			x : abscisse du coin supérieur gauche de la miniature.
+		 *			y: ordonnée du coin supérieur gauche de la miniature.
+		 *		path:(String) Chemin de sauvegarde de la mininature.
+		 */
+		private static function createGIF($img,$imct,$thumb,$coord,$path){
+			$imc = imagecreatefromgif($img->getPath());
+			
+			if (imagecolortransparent($imc) >= 0) {
+				$color = imagecolorallocate($imct, 255, 255, 255);
+				imagefill($imct, 0, 0, $color);
+				imagecolortransparent($imct, $color);						
 			}
+			
+			imagecopyresampled(
+				$imct, $imc, $coord['x'], $coord['y'], 0, 0, 
+				$thumb->getWidth(), $thumb->getHeight(), 
+				$img->getWidth(), $img->getHeight()
+			);
+			
+			imagegif($imct,$path.$img->getName());
+		}
+		
+		/**
+		 *	Méthode de création d'image PNG
+		 *
+		 *	@params
+		 *		img : (Image) Objet image à manipuler.
+		 *		imct:(Resource) Renvoyée par la méthode imagecreatetruecolor()
+		 *		thumb:(Image) Objet image réduit.
+		 *		coord:(Array)
+		 *			x : abscisse du coin supérieur gauche de la miniature.
+		 *			y: ordonnée du coin supérieur gauche de la miniature.
+		 *		path:(String) Chemin de sauvegarde de la mininature.
+		 */
+		private static function createPNG($img,$imct,$thumb,$coord,$path){
+			$imc = imagecreatefrompng($img->getPath());
+			
+			imagealphablending($imct, false);
+			imagesavealpha($imct, true);
+			
+			$trans_colour = imagecolorallocatealpha($imct, 0, 0, 0, 127);
+			imagefill($imct, 0, 0, $trans_colour);
+							
+			imagecopyresampled(
+				$imct, $imc, $coord['x'], $coord['y'], 0, 0, 
+				$thumb->getWidth(), $thumb->getHeight(), 
+				$img->getWidth(), $img->getHeight()
+			);
+			
+			imagepng($imct,$path.$img->getName());
 		}
 	}
 	
-	
 	/**
-	 *	TODO
+	 *	***** TODO *****
 	 *
-	 *	Classe d'exception générale relative à la classe ImageManager.
+	 *	Classe d'exception générale relative à la classe Manager.
 	 */
 	class ImageManagerErrorException extends Exception{}
 ?>

@@ -1,8 +1,8 @@
 <?php
-	require 'lib/class/Manager.class.php';
+	require 'lib/class/ImageManager.class.php';
 	require 'lib/class/Canvas.class.php';
 	
-	$man = new Manager(
+	$man = new ImageManager(
 		array(
 			'maxWidth' => 420,
 		)

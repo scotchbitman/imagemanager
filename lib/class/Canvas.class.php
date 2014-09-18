@@ -19,6 +19,15 @@
 		public function getPath(){return $this->path;}
 		public function getType(){return $this->type;}
 		public function getMime(){return $this->mime;}
+		
+		/**
+		 *	@return (String) 
+		 *		Retourne le nom du fichier image.
+		 */
+		public function getName(){
+			$parts = explode('/',$this->path);
+			return $parts[count($parts) - 1];
+		}
 	
 		/**
 		 *	Permet de réduire la taille de la trame en fonction des dimensions
